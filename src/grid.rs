@@ -1,5 +1,6 @@
-use wasm_bindgen::JsValue;
+use js_sys::Math;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Cell {
     Block,
     Path,
@@ -7,17 +8,33 @@ pub enum Cell {
     End,
 }
 
-
+impl From<usize> for Cell {
+    fn from(from: usize) -> Self {
+        match from {
+            0 => Cell::Block,
+            1 => Cell::Path,
+            2 => Cell::Start,
+            _ => Cell::End,
+        }
+    }
+}
 
 impl Cell {
-    pub fn fill_color(&self) -> JsValue {
-        let color = match self {
+    pub fn fill_color(&self) -> &'static str {
+        match self {
             Cell::Block => "#111",
-            Cell::Path => "#888",
-            Cell::Start => "#128",
-            Cell::End => "#821",
-        };
-        JsValue::from(color)
+            Cell::Path => "#333",
+            Cell::Start => "#ddd",
+            Cell::End => "#0a0",
+        }
+    }
+    pub fn stroke_color(&self) -> &'static str {
+        match self {
+            Cell::Block => "#222",
+            Cell::Path => "#444",
+            Cell::Start => "#fff",
+            Cell::End => "#0b0",
+        }
     }
 }
 
@@ -27,20 +44,27 @@ pub struct Grid {
     data: Vec<Cell>,
 }
 
-fn grid_new() _> Grid;
-fn grid_modify(grid, ) {}
-
 impl Grid {
     pub fn new(width: usize, height: usize) -> Self {
-        //let rng = rand::thread_rng();
         let mut data = Vec::new();
         for _ in 0..(width * height) {
             data.push(Cell::Path);
         }
+        let rand = Math::random();
+        let len = data.len();
+        data[(rand * len as f64) as usize] = Cell::Start;
+        let rand = Math::random();
+        data[(rand * len as f64) as usize] = Cell::End;
         Self {
             width,
             height,
             data,
         }
+    }
+    pub fn get(&self, row: usize, column: usize) -> Cell {
+        *self
+            .data
+            .get(row * self.width + column)
+            .unwrap_or_else(|| panic!("COLDN' find at {} {}", row, column))
     }
 }

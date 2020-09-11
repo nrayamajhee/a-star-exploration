@@ -4,6 +4,15 @@ use web_sys::{
     Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement, HtmlStyleElement, Window,
 };
 
+#[macro_export]
+macro_rules! log {
+    ($($each: expr),*) => {
+        $(
+            web_sys::console::log_1(&wasm_bindgen::JsValue::from($each));
+        )*
+    }
+}
+
 pub fn window() -> Window {
     web_sys::window().unwrap()
 }

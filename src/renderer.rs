@@ -7,12 +7,11 @@ pub struct Renderer {
     canvas: HtmlCanvasElement,
     ctx: CanvasRenderingContext2d,
     grid: Rc<Grid>,
-    gap_width: f64,
+    gap: usize,
 }
 
 impl Renderer {
-    pub fn new(canvas: HtmlCanvasElement, grid: Rc<Grid>) -> Self {
-        let gap_width = 2.;
+    pub fn new(canvas: HtmlCanvasElement, grid: Rc<Grid>, gap: usize) -> Self {
         let ctx = canvas
             .get_context("2d")
             .unwrap()
@@ -23,12 +22,53 @@ impl Renderer {
             canvas,
             ctx,
             grid,
-            gap_width,
+            gap,
         }
     }
 }
 
 impl Renderer {
+    pub fn resize_canvas(&self) -> (usize, usize, f64) {
+        let width = body().offset_width();
+        let height = body().offset_height();
+        let window_ar = width as f64 / height as f64;
+        let grid_ar = self.grid.width as f64 / self.grid.height as f64;
+        if window_ar > grid_ar {
+            let cell_size = (height as usize - self.grid.height * self.gap - self.gap) as f64
+                / self.grid.height as f64;
+            let width =
+                (self.grid.width as f64 * (cell_size + self.gap as f64)) as usize + self.gap;
+            self.canvas.set_width(width as u32);
+            self.canvas.set_height(height as u32);
+            (width, height as usize, cell_size)
+        } else {
+            let cell_size = (width as usize - self.grid.width * self.gap - self.gap) as f64
+                / self.grid.width as f64;
+            let height =
+                (self.grid.height as f64 * (cell_size + self.gap as f64)) as usize + self.gap;
+            self.canvas.set_width(width as u32);
+            self.canvas.set_height(height as u32);
+            (width as usize, height, cell_size)
+        }
+    }
+    pub fn draw_grid(&self) {
+        let (width, height, cell_size) = self.resize_canvas();
+        self.ctx.clear_rect(0., 0., width as f64, height as f64);
+        for i in 0..self.grid.height {
+            for j in 0..self.grid.width {
+                let (x, y) = self.get_offset(j, i, cell_size);
+                let cell = self.grid.get(i, j);
+                self.draw_cell(
+                    x as f64,
+                    y as f64,
+                    cell_size,
+                    cell_size,
+                    cell.fill_color(),
+                    cell.stroke_color(),
+                );
+            }
+        }
+    }
     pub fn draw_cell(
         &self,
         x: f64,
@@ -39,54 +79,15 @@ impl Renderer {
         stroke_color: &str,
     ) {
         self.ctx.set_fill_style(&JsValue::from(fill_color));
-        self.ctx.set_stroke_style(&JsValue::from(stroke_color));
-        self.ctx.set_line_width(1.);
         self.ctx.fill_rect(x, y, width, height);
+        self.ctx.set_line_width(2.);
+        self.ctx.set_stroke_style(&JsValue::from(stroke_color));
         self.ctx.stroke_rect(x, y, width, height);
     }
-    pub fn resize_canvas(&self) {
-        let width = body().offset_width();
-        let height = body().offset_height();
-        let cell_size = if self.grid.width < self.grid.height {
-            (width as f64 - self.grid.width as f64 * self.gap_width - self.gap_width)
-                / self.grid.width as f64
-        } else {
-            (height as f64 - self.grid.height as f64 * self.gap_width - self.gap_width)
-                / self.grid.height as f64
-        };
-        let aspect_ratio = self.grid.width / self.grid.height;
-        self.canvas.set_width(cell_size * self.grid.width);
-        self.canvas.set_height(aspect_ratio * self.grid.height);
-    }
-    pub fn draw_grid(&self, grid: &Grid, gap_width: f64) {
-        let extent = self.resize_canvas();
-        let extent = extent as f64;
-        self.ctx.clear_rect(0., 0., extent as f64, extent as f64);
-        for i in 0..grid.width {
-            for j in 0..grid.height {
-                let (x, y) = Self::get_offset(i as f64, j as f64, cell_width, cell_height, 2.);
-                web_sys::console::log_1(&format!("{} x {} : {} x {}", i, j, x, y).into());
-                self.draw_cell(x, y, cell_width, cell_height, "red", "blue");
-            }
-        }
-    }
-
-    pub fn get_dimension(
-        width: f64,
-        height: f64,
-        num_cells_row: usize,
-        num_cells_column: usize,
-        gap_width: f64,
-    ) -> (f64, f64) {
-        let dx = (width - num_cells_row as f64 * gap_width - gap_width) / num_cells_row as f64;
-        let dy = (height - num_cells_row as f64 * gap_width - gap_width) / num_cells_column as f64;
-        (dx, dy)
-    }
-
-    fn get_offset(row: f64, column: f64, width: f64, height: f64, gap_width: f64) -> (f64, f64) {
+    fn get_offset(&self, row: usize, column: usize, cell_size: f64) -> (f64, f64) {
         (
-            gap_width + (row * (width + gap_width)),
-            gap_width + (column * (height + gap_width)),
+            self.gap as f64 + (row as f64 * (cell_size + self.gap as f64)),
+            self.gap as f64 + (column as f64 * (cell_size + self.gap as f64)),
         )
     }
 }

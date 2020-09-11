@@ -19,6 +19,8 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlCanvasElement;
 
+use std::rc::Rc;
+
 #[wasm_bindgen(start)]
 pub async fn run() -> Result<(), JsValue> {
     #[cfg(feature = "console_error_panic_hook")]
@@ -41,13 +43,11 @@ pub async fn run() -> Result<(), JsValue> {
     );
     let canvas = create_el("canvas");
     body().append_child(&canvas).unwrap();
-    let grid = Rc::new(Grid::new(100, 50));
-    let renderer = Renderer::new(canvas.dyn_into::<HtmlCanvasElement>().unwrap(), grid.clone());
-    //console::log_1(&format!("{} x {}\n{} x {}", width, height, dx, dy).into());
-    //console::log_1(&format!("{} x {}", x, y).into());
-    renderer.draw_grid(&grid, 2.);
+    let grid = Rc::new(Grid::new(50, 25));
+    let renderer = Renderer::new(canvas.dyn_into::<HtmlCanvasElement>().unwrap(), grid.clone(), 5);
+    renderer.draw_grid();
     add_event(&window(), "resize", move |_| {
-        renderer.draw_grid(&grid, 2.);
+        renderer.draw_grid();
     });
     Ok(())
 }
