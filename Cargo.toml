@@ -44,7 +44,8 @@ features = [
 	"CanvasRenderingContext2d",
 	"Event",
 	"EventTarget",
-	"MouseEvent"
+	"MouseEvent",
+	"Performance"
 ]
 
 [profile.release]

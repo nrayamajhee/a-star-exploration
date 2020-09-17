@@ -1,11 +1,25 @@
 use crate::{
-    dom::{add_event, add_style, body, create_el, document, window, RcCell},
+    dom::{add_event, window, add_style, body, create_el, loop_animation_frame, RcCell},
     grid::{Cell, Grid},
     renderer::Renderer,
 };
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{HtmlCanvasElement, MouseEvent};
 
+use crate::log;
+
+#[derive(Clone, Copy)]
+pub enum MouseState {
+    Down(usize, usize),
+    Move(usize, usize),
+}
+
+#[derive(Clone, Copy)]
+pub enum AppEvent {
+    Fill(usize, usize),
+    Resize,
+    None,
+}
 pub async fn start() -> Result<(), JsValue> {
     add_style(
         "
@@ -25,22 +39,53 @@ pub async fn start() -> Result<(), JsValue> {
     );
     let canvas = create_el("canvas");
     body().append_child(&canvas).unwrap();
-    let h_canvas = canvas.clone().dyn_into::<HtmlCanvasElement>().unwrap();
-    let grid = RcCell::new(Grid::new(50, 25));
-    let renderer = Renderer::new(&h_canvas, grid.clone(), 5);
-    let renderer = RcCell::new(renderer);
-    let r = renderer.clone();
+    let canvas = canvas.clone().dyn_into::<HtmlCanvasElement>().unwrap();
+    let eve = RcCell::new(AppEvent::None);
+    let events = eve.clone();
     add_event(&canvas, "mousedown", move |e| {
         let me = e.dyn_into::<MouseEvent>().unwrap();
-        let (x, y) = (me.client_x(), me.client_y());
-        let (i, j) = r.borrow().get_indices(x as usize, y as usize);
-        grid.borrow_mut().set(i, j, Cell::Path);
-        r.borrow().draw_grid();
+        events.mutate(AppEvent::Fill(
+            me.offset_x() as usize,
+            me.offset_y() as usize,
+        ));
     });
-    let r = renderer.clone();
-    add_event(&window(), "resize", move |_| {
-        r.borrow_mut().resize_canvas(&h_canvas);
+    let events = eve.clone();
+    add_event(&canvas, "mousemove", move |e| {
+        let me = e.dyn_into::<MouseEvent>().unwrap();
+        if let AppEvent::Fill(ref mut x, ref mut y) = *events.borrow_mut() {
+            *x = me.offset_x() as usize;
+            *y = me.offset_y() as usize;
+        }
     });
-    renderer.borrow().draw_grid();
+    let events = eve.clone();
+    add_event(&canvas, "mouseup", move |e| {
+        events.mutate(AppEvent::None);
+    });
+    let mut grid = Grid::new(50, 25);
+    let mut renderer = Renderer::new(&canvas, 5);
+    let events = eve.clone();
+    add_event(&window(), "resize", move |e| {
+        events.mutate(AppEvent::Resize);
+    });
+    let events = eve.clone();
+    loop_animation_frame(
+        move |_| {
+            match *events.borrow() {
+                AppEvent::Fill(x, y) => {
+                    let (col, row) = renderer.get_indices(x, y);
+                    if grid.get(row, col) == Cell::Path  {
+                        grid.set(row, col, Cell::Block);
+                    }
+                }
+                AppEvent::Resize => {
+                    renderer.resize(&canvas, &grid);
+                }
+                _ => (),
+            }
+            renderer.draw_grid(&grid);
+        },
+        None,
+    );
+    eve.mutate(AppEvent::Resize);
     Ok(())
 }

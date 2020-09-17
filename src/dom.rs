@@ -103,3 +103,54 @@ where
         .unwrap();
     closure.forget();
 }
+
+pub fn now() -> f64 {
+    window()
+        .performance()
+        .expect("Performance should be available")
+        .now()
+}
+
+pub fn request_animation_frame(f: &Closure<dyn FnMut()>) -> i32 {
+    window()
+        .request_animation_frame(f.as_ref().unchecked_ref())
+        .expect("should register `requestAnimationFrame` OK")
+}
+
+pub fn set_timeout<H>(callback: H, timeout: i32)
+where
+    H: 'static + Fn(),
+{
+    let cl = Closure::wrap(Box::new(callback) as Box<dyn Fn()>);
+    window()
+        .set_timeout_with_callback_and_timeout_and_arguments_0(cl.as_ref().unchecked_ref(), timeout)
+        .unwrap();
+    cl.forget();
+}
+
+pub fn loop_animation_frame<F>(mut closure: F, fps: Option<f64>)
+where
+    F: 'static + FnMut(f64),
+{
+    let f = Rc::new(RefCell::new(None));
+    let g = f.clone();
+    let t = Rc::new(RefCell::new(0.));
+    let then = t.clone();
+    *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+        let mut then = then.borrow_mut();
+        let delta = now() - *then;
+        *then = now();
+        closure(delta);
+        let h = f.clone();
+        let next_frame = move || {
+            request_animation_frame(h.borrow().as_ref().unwrap());
+        };
+        if let Some(fps) = fps {
+            set_timeout(next_frame, ((1000. / fps) - delta) as i32);
+        } else {
+            next_frame();
+        };
+    }) as Box<dyn FnMut()>));
+    *t.borrow_mut() = now();
+    request_animation_frame(g.borrow().as_ref().unwrap());
+}

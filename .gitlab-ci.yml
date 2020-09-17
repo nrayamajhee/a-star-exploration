@@ -1,0 +1,15 @@
+image: nrayamajhee/arch-wasm-pack
+
+pages:
+  stage: deploy
+  script:
+  - wasm-pack build 
+  #- wasm-pack test --headless --chrome
+  - cd www
+  - npm install && npm run build
+  - mv dist ../public
+  artifacts:
+    paths:
+    - public
+  only:
+  - master

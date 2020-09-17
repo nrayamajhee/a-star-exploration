@@ -30,7 +30,7 @@ impl Cell {
     }
     pub fn stroke_color(&self) -> &'static str {
         match self {
-            Cell::Block => "#222",
+            Cell::Block => "#333",
             Cell::Path => "#444",
             Cell::Start => "#fff",
             Cell::End => "#0b0",
