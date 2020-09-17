@@ -38,6 +38,7 @@ impl Cell {
     }
 }
 
+#[derive(Clone)]
 pub struct Grid {
     pub width: usize,
     pub height: usize,
@@ -65,6 +66,14 @@ impl Grid {
         *self
             .data
             .get(row * self.width + column)
-            .unwrap_or_else(|| panic!("COLDN' find at {} {}", row, column))
+            .unwrap_or_else(|| panic!("Couldn't find at {} {}", row, column))
+    }
+    pub fn set(&mut self, row: usize, column: usize, cell: Cell) {
+        let index = row * self.width + column;
+        if index >= self.data.len() {
+            panic!("Couldn't find at {} {}", row, column);
+        } else {
+            self.data[index] = cell;
+        }
     }
 }
