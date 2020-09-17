@@ -1,19 +1,47 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
-mod grid;
-mod start;
-mod dom;
-mod renderer;
+#[derive(Clone)]
+pub struct RcCell<T>(pub Rc<RefCell<T>>);
 
-// When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
-// allocator.
+impl<T> RcCell<T> {
+    pub fn new(inner: T) -> Self {
+        Self(Rc::new(RefCell::new(inner)))
+    }
+    pub fn mutate(&self, value: T) {
+        *self.0.borrow_mut() = value;
+    }
+}
+
+use std::ops::Deref;
+
+impl<T> Deref for RcCell<T> {
+    type Target = RefCell<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+mod app;
+pub mod dom;
+mod grid;
+mod renderer;
+mod start;
+
+#[doc(inine)]
+pub use crate::{app::*, grid::*, renderer::*, start::*};
+
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
 static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
+#[doc(hidden)]
 #[wasm_bindgen(start)]
 pub async fn run() -> Result<(), JsValue> {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
-    start::start().await
+    start::start();
+    Ok(())
 }

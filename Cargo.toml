@@ -45,7 +45,7 @@ features = [
 	"Event",
 	"EventTarget",
 	"MouseEvent",
-	"Performance"
+	"Performance",
 ]
 
 [profile.release]

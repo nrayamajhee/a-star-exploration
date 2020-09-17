@@ -1,63 +1,9 @@
 #![allow(dead_code)]
+use crate::RcCell;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
     Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement, HtmlStyleElement, Window,
 };
-
-#[macro_export]
-macro_rules! log {
-    ($($x:expr) *) => {
-        {
-            let document = crate::dom::document();
-            let console_el = document.get_element_by_id("console");
-            let mut msg = String::new();
-            use std::any::Any;
-            $(
-                if let Some(s) = (&$x as &dyn Any).downcast_ref::<&str>() {
-                    msg.push_str(&format!("{} ", s));
-                } else if let Some(s) = (&$x as &dyn Any).downcast_ref::<&dyn std::fmt::Display>() {
-                    msg.push_str(&format!("{} ", s));
-                } else {
-                    msg.push_str(&format!("{:?} ",$x));
-                }
-            )*
-            if let Some(_) = console_el {
-                web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&msg));
-                use crate::dom::{insert_html_at, get_el};
-                insert_html_at(&get_el("logs"),
-                        &format!("<div><i class='material-icons-outlined'>info</i><pre>{}</pre></div>", msg),
-                        "afterbegin");
-            } else {
-                web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&msg));
-            }
-        }
-    };
-}
-
-use std::cell::RefCell;
-use std::rc::Rc;
-
-#[derive(Clone)]
-pub struct RcCell<T>(pub Rc<RefCell<T>>);
-
-impl<T> RcCell<T> {
-    pub fn new(inner: T) -> Self {
-        Self(Rc::new(RefCell::new(inner)))
-    }
-    pub fn mutate(&self, value: T) {
-        *self.0.borrow_mut() = value;
-    }
-}
-
-use std::ops::Deref;
-
-impl<T> Deref for RcCell<T> {
-    type Target = RefCell<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &*self.0
-    }
-}
 
 pub fn get_el(id: &str) -> Element {
     document().get_element_by_id(id).unwrap()
@@ -104,6 +50,17 @@ where
     closure.forget();
 }
 
+pub fn add_event_mut<'a, T, F>(el: &EventTarget, type_: &str, event: &RcCell<T>, closure: F)
+where
+    F: Fn(&mut T, Event) + 'static,
+    T: Clone + 'static,
+{
+    let eve = event.clone();
+    add_event(&el, type_, move |e| {
+        closure(&mut *eve.borrow_mut(), e);
+    });
+}
+
 pub fn now() -> f64 {
     window()
         .performance()
@@ -127,6 +84,9 @@ where
         .unwrap();
     cl.forget();
 }
+
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub fn loop_animation_frame<F>(mut closure: F, fps: Option<f64>)
 where
@@ -153,4 +113,34 @@ where
     }) as Box<dyn FnMut()>));
     *t.borrow_mut() = now();
     request_animation_frame(g.borrow().as_ref().unwrap());
+}
+
+#[macro_export]
+macro_rules! log {
+    ($($x:expr) *) => {
+        {
+            let document = crate::dom::document();
+            let console_el = document.get_element_by_id("console");
+            let mut msg = String::new();
+            use std::any::Any;
+            $(
+                if let Some(s) = (&$x as &dyn Any).downcast_ref::<&str>() {
+                    msg.push_str(&format!("{} ", s));
+                } else if let Some(s) = (&$x as &dyn Any).downcast_ref::<&dyn std::fmt::Display>() {
+                    msg.push_str(&format!("{} ", s));
+                } else {
+                    msg.push_str(&format!("{:?} ",$x));
+                }
+            )*
+            if let Some(_) = console_el {
+                web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&msg));
+                use crate::dom::{insert_html_at, get_el};
+                insert_html_at(&get_el("logs"),
+                        &format!("<div><i class='material-icons-outlined'>info</i><pre>{}</pre></div>", msg),
+                        "afterbegin");
+            } else {
+                web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&msg));
+            }
+        }
+    };
 }
