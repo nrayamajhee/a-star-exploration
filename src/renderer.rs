@@ -104,8 +104,8 @@ impl Renderer {
         // Caching will resolve it but it's not important right now
         self.ctx.set_fill_style(&JsValue::from(fill_color));
         self.ctx.fill_rect(x, y, width, height);
-        if let Some(width) = self.config.stroke_width {
-            self.ctx.set_line_width(width);
+        if let Some(stroke_w) = self.config.stroke_width {
+            self.ctx.set_line_width(stroke_w);
             // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
             // Caching will resolve it but it's not important right now
             self.ctx.set_stroke_style(&JsValue::from(stroke_color));

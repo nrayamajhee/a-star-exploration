@@ -6,8 +6,8 @@ use crate::{
     dom::{add_style, body, create_el},
     grid::Grid,
     renderer::Renderer,
+    AStar, Node,
 };
-
 
 /// The entry point to our app
 pub fn start() {
@@ -19,6 +19,7 @@ pub fn start() {
             margin: 0;
             overflow: hidden;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
         }
@@ -30,9 +31,9 @@ pub fn start() {
     let canvas = create_el("canvas");
     body().append_child(&canvas).unwrap();
     let canvas = canvas.clone().dyn_into::<HtmlCanvasElement>().unwrap();
-    let grid = Grid::new(150, 75);
-    let renderer = Renderer::new(&canvas, 1., None);
-    let app = App::new(canvas, grid, renderer);
-    app.bind_events();
+    let mut grid = Grid::new(50, 25);
+    let renderer = Renderer::new(&canvas, 4., Some(2.));
+    let graph = AStar::new(&mut grid);
+    let app = App::new(canvas, grid, graph, renderer);
     app.start();
 }

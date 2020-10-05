@@ -1,3 +1,6 @@
+#![feature(map_first_last)]
+
+mod macros;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -24,14 +27,14 @@ impl<T> Deref for RcCell<T> {
     }
 }
 
-mod app;
-pub mod dom;
-mod grid;
-mod renderer;
-mod start;
-
-#[doc(inine)]
-pub use crate::{app::*, grid::*, renderer::*, start::*};
+crate::use_mod!(
+    app,
+    dom,
+    grid,
+    renderer,
+    start,
+    node,
+);
 
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
