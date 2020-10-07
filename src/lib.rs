@@ -1,4 +1,4 @@
-#![feature(map_first_last)]
+#![feature(deque_make_contiguous)]
 
 mod macros;
 use std::cell::RefCell;

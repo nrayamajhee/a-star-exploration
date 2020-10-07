@@ -15,8 +15,8 @@ impl Cell {
             Cell::Block => "#111",
             Cell::Path => "#333",
             Cell::Start => "#0a0",
-            Cell::End => "#aaa",
-            Cell::ShortestPath => "#aa0",
+            Cell::End => "#aa0",
+            Cell::ShortestPath => "#aaa",
             Cell::Visiting => "#03c",
             Cell::Visited => "#a00",
         }
@@ -26,8 +26,8 @@ impl Cell {
             Cell::Block => "#0a0a0a",
             Cell::Path => "#3e3e3e",
             Cell::Start => "#0c0",
-            Cell::End => "#ccc",
-            Cell::ShortestPath => "#cc0",
+            Cell::End => "#cc0",
+            Cell::ShortestPath => "#ccc",
             Cell::Visiting => "#05c",
             Cell::Visited => "#c00",
         }

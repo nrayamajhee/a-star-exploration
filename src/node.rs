@@ -1,18 +1,21 @@
-use crate::{Cell, Grid, Renderer};
+use crate::{Cell, Grid};
 use js_sys::Math;
 
-use std::collections::BinaryHeap;
-use std::collections::HashMap;
+use priority_queue::PriorityQueue;
+use std::collections::HashSet;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Position<T> {
-    pub x: T,
-    pub y: T,
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+pub struct Position {
+    pub x: usize,
+    pub y: usize,
 }
 
-impl<T> Position<T> {
-    fn new(x: T, y: T) -> Self {
+impl Position {
+    fn new(x: usize, y: usize) -> Self {
         Self { x, y }
+    }
+    fn h_cost(&self, another: &Self) -> usize {
+        (self.x - another.x).pow(2) + (self.y - another.y).pow(2)
     }
 }
 
@@ -34,7 +37,7 @@ pub enum Direction {
 use std::f32::consts::PI;
 
 impl Direction {
-    pub fn get_coordinate(&self, x: i32, y: i32) -> (i32, i32) {
+    pub fn get_coordinate(&self, x: isize, y: isize) -> (isize, isize) {
         match self {
             Direction::North => (x, y - 1),
             Direction::NorthEast => (x + 1, y - 1),
@@ -46,49 +49,81 @@ impl Direction {
             Direction::NorthWest => (x - 1, y - 1),
         }
     }
-    pub fn distance_to(&self) -> f32 {
+    pub fn g_cost(&self) -> usize {
         match self {
-            Direction::North | Direction::East | Direction::South | Direction::West => 1.0,
+            Direction::North | Direction::East | Direction::South | Direction::West => 10,
             Direction::SouthEast
             | Direction::SouthWest
             | Direction::NorthEast
-            | Direction::NorthWest => f32::sqrt(2.),
+            | Direction::NorthWest => 14,
         }
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Node {
-    pub cost: usize,
-    pub pos: Position<usize>,
+    pub pos: Position,
     pub parent: Option<Box<Node>>,
 }
 
-use std::cmp::Ordering;
-impl Ord for Node {
-    fn cmp(&self, other: &Node) -> Ordering {
-        other.cost.cmp(&self.cost)
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct Cost {
+    pub f_cost: usize,
+    pub g_cost: usize,
+    pub h_cost: usize,
+}
+
+impl Default for Cost {
+    fn default() -> Self {
+        let max = usize::MAX;
+        Cost {
+            f_cost: max,
+            g_cost: max,
+            h_cost: max,
+        }
     }
 }
 
-impl PartialOrd for Node {
-    fn partial_cmp(&self, other: &Node) -> Option<Ordering> {
+use std::cmp::Ordering;
+
+impl Ord for Cost {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.f_cost <= other.f_cost && self.h_cost < other.h_cost {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }
+    }
+}
+
+impl PartialOrd for Cost {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
 impl Node {
-    pub fn distance_to(&self, another: &Self) -> f32 {
-        let dx = self.pos.x as f32 - another.pos.x as f32;
-        let dy = self.pos.y as f32 - another.pos.y as f32;
-        (dx.powi(2) + dy.powi(2)).sqrt()
-    }
     pub fn new(x: usize, y: usize) -> Self {
         Self {
             pos: Position::new(x, y),
-            cost: usize::MAX,
             parent: None,
         }
+    }
+    pub fn get_neighbour(&self, direction: Direction, grid: &Grid) -> Result<Self, &'static str> {
+        let (x, y) = direction.get_coordinate(self.pos.x as isize, self.pos.y as isize);
+        if x >= 0 && y >= 0 {
+            let pos = Position::new(x as usize, y as usize);
+            let neighbour = Self {
+                pos,
+                parent: Some(Box::new(self.clone())),
+            };
+            if let Some(cell) = grid.try_get(neighbour.pos.x, neighbour.pos.y) {
+                if cell != Cell::Block {
+                    return Ok(neighbour);
+                }
+            }
+        }
+        Err("This neighbour is outside the board!")
     }
     pub fn set_parent(&mut self, parent: Node) {
         self.parent = Some(Box::new(parent));
@@ -97,13 +132,16 @@ impl Node {
 
 #[derive(Clone)]
 pub struct AStar {
-    open: BinaryHeap<Node>,
-    closed: Vec<Node>,
-    start: Node,
-    target: Node,
+    open: PriorityQueue<Node, Cost>,
+    closed: HashSet<Position>,
+    start: Position,
+    target: Position,
 }
 
 impl AStar {
+    pub fn not_start_nor_end(&self, pos: Position) -> bool {
+        pos != self.start && pos != self.target
+    }
     pub fn new(grid: &mut Grid) -> Self {
         let rand = Math::random();
         let (w, h) = (grid.width, grid.height);
@@ -113,15 +151,16 @@ impl AStar {
             let y = (rand * h as f64) as usize;
             (x, y)
         };
-        let mut open = BinaryHeap::new();
-        let closed = Vec::new();
+        let mut open = PriorityQueue::new();
+        let closed = HashSet::new();
         let (x, y) = get_x_y();
         grid.set(x, y, Cell::Start);
-        let mut start = Node::new(x as usize, y as usize);
-        let (x, y) = get_x_y();
+        let start = Position::new(x, y);
+        let start_node = Node::new(x as usize, y as usize);
+        open.push(start_node, Default::default());
+        let (x, y1) = get_x_y();
         grid.set(x, y, Cell::End);
-        let target = Node::new(x as usize, y as usize);
-        open.push(start.clone());
+        let target = Position::new(x, y);
         Self {
             open,
             closed,
@@ -130,53 +169,62 @@ impl AStar {
         }
     }
     pub fn find(&mut self, grid: &mut Grid) {
-        let current = self.open.pop().unwrap();
-        self.closed.push(current.clone());
-        if current == self.target {
+        let (current_node, current_cost) = self.open.pop().unwrap();
+        self.closed.insert(current_node.pos);
+        if current_node.pos == self.target {
             return;
         }
-        for each in Direction::iter() {
-            let (x, y) = each.get_coordinate(current.pos.x as i32, current.pos.y as i32);
-            if x >= 0 && y >= 0 {
-                let (x, y) = (x as usize, y as usize);
-                let mut neighbour = Node::new(x, y);
-                if let Some(cell) = grid.try_get(x, y) {
-                    if !self.closed.iter().any(|e| e.pos == neighbour.pos) && cell != Cell::Block {
-                        let n_cost = (each.distance_to() + neighbour.distance_to(&self.target))
-                            .ceil() as usize;
-                        let n_in_open = self.open.iter().any(|e| e.pos == neighbour.pos);
-                        if n_cost < current.cost || !n_in_open {
-                            neighbour.set_parent(current.clone());
-                            neighbour.cost = n_cost;
-                            if !n_in_open {
-                                self.open.push(neighbour);
+        for dir in Direction::iter() {
+            if let Ok(mut neighbour) = current_node.get_neighbour(dir, grid) {
+                if !self.closed.contains(&neighbour.pos) {
+                    //let g_cost = neighbour.pos.h_cost(&self.target);
+                    let cost = current_cost.g_cost + dir.g_cost();
+                    let h_cost = neighbour.pos.h_cost(&self.target);
+                    let neighbour_cost = Cost {
+                        g_cost: cost,
+                        h_cost,
+                        f_cost: cost + h_cost,
+                    };
+                    let mut in_open = false;
+                    for (old_n, old_n_cost) in self.open.iter_mut() {
+                        if old_n.pos == neighbour.pos {
+                            if cost < old_n_cost.g_cost {
+                                old_n.set_parent(current_node.clone());
+                                *old_n_cost = neighbour_cost;
                             }
+                            in_open = true;
+                            break;
                         }
+                    }
+                    if !in_open {
+                        neighbour.set_parent(current_node.clone());
+                        self.open.push(neighbour, neighbour_cost);
                     }
                 }
             }
         }
     }
     pub fn fill(&mut self, grid: &mut Grid) -> bool {
-        if let Some(first) = self.open.peek() {
-            if first.pos == self.target.pos {
+        let (open, _) = self.open.peek().unwrap();
+        let open = open.clone();
+        if !self.open.is_empty() {
+            if open.pos == self.target {
                 true
             } else {
                 self.find(grid);
-                //crate::log!("OPENED", self.start.pos);
-                for each in self.open.iter() {
-                    //crate::log!("EACh", each.pos);
-                    if each.pos != self.start.pos && each.pos != self.target.pos {
+                for (each, _) in self.open.iter() {
+                    if self.not_start_nor_end(*&each.pos) {
                         grid.set(each.pos.x as usize, each.pos.y as usize, Cell::Visiting);
                     }
                 }
                 for each in self.closed.iter() {
-                    if each.pos != self.start.pos && each.pos != self.target.pos {
-                        grid.set(each.pos.x as usize, each.pos.y as usize, Cell::Visited);
+                    if self.not_start_nor_end(*each) {
+                        grid.set(each.x as usize, each.y as usize, Cell::Visited);
                     }
                 }
-                let top = self.open.peek().unwrap();
-                grid.set(top.pos.x as usize, top.pos.y as usize, Cell::ShortestPath);
+                if self.not_start_nor_end(open.pos) {
+                    grid.set(open.pos.x as usize, open.pos.y as usize, Cell::ShortestPath);
+                }
                 false
             }
         } else {
@@ -184,14 +232,17 @@ impl AStar {
         }
     }
     pub fn trace(&mut self, grid: &mut Grid) {
-        if let Some(mut head) = self.open.peek() {
-            while let Some(ref parent) = head.parent {
-                grid.set(
-                    parent.pos.x as usize,
-                    parent.pos.y as usize,
-                    Cell::ShortestPath,
-                );
-                head = parent;
+        if let Some((head, _)) = self.open.pop() {
+            let mut current = head;
+            while let Some(parent) = current.parent {
+                if self.not_start_nor_end(parent.pos) {
+                    grid.set(
+                        parent.pos.x as usize,
+                        parent.pos.y as usize,
+                        Cell::ShortestPath,
+                    );
+                }
+                current = *parent;
             }
         }
     }

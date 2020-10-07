@@ -3,7 +3,7 @@ use web_sys::HtmlCanvasElement;
 
 use crate::{
     app::App,
-    dom::{add_style, body, create_el},
+    dom::{add_style, body, create_el, document},
     grid::Grid,
     renderer::Renderer,
     AStar, Node,
@@ -30,6 +30,7 @@ pub fn start() {
     );
     let canvas = create_el("canvas");
     body().append_child(&canvas).unwrap();
+    document().set_title("A Star Exploration");
     let canvas = canvas.clone().dyn_into::<HtmlCanvasElement>().unwrap();
     let mut grid = Grid::new(50, 25);
     let renderer = Renderer::new(&canvas, 4., Some(2.));

@@ -3,7 +3,7 @@ use crate::{
     grid::Grid,
 };
 use wasm_bindgen::{JsCast, JsValue};
-use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, Path2d};
 
 #[derive(Clone)]
 pub struct RendererConfig {
@@ -103,13 +103,18 @@ impl Renderer {
         // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
         // Caching will resolve it but it's not important right now
         self.ctx.set_fill_style(&JsValue::from(fill_color));
-        self.ctx.fill_rect(x, y, width, height);
+        let circle = Path2d::new().unwrap();
+        let r = width / 2.;
+        circle.arc(x + r, y + r, r, 0., std::f64::consts::TAU).unwrap();
+        self.ctx.fill_with_path_2d(&circle);
+        //self.ctx.fill_rect(x, y, width, height);
         if let Some(stroke_w) = self.config.stroke_width {
             self.ctx.set_line_width(stroke_w);
             // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
             // Caching will resolve it but it's not important right now
             self.ctx.set_stroke_style(&JsValue::from(stroke_color));
-            self.ctx.stroke_rect(x, y, width, height);
+            //self.ctx.stroke_rect(x, y, width, height);
+            self.ctx.stroke_with_path(&circle);
         }
     }
     fn get_offset(&self, row: usize, column: usize) -> (f64, f64) {
