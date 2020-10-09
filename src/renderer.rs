@@ -1,6 +1,6 @@
 use crate::{
     dom::{add_event, body},
-    grid::Grid,
+    grid::{Cell, Grid},
 };
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, Path2d};
@@ -12,6 +12,13 @@ pub struct RendererConfig {
     pub gap: f64,
     pub cell_size: f64,
     pub stroke_width: Option<f64>,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum DrawMode {
+    Rectangle,
+    Circle,
+    Point,
 }
 
 #[derive(Clone)]
@@ -44,7 +51,7 @@ impl Renderer {
     }
     pub fn resize(&mut self, canvas: &HtmlCanvasElement, grid: &Grid) {
         let width = body().offset_width();
-        let height = body().offset_height();
+        let height = body().offset_height() - 40;
         let window_ar = width as f64 / height as f64;
         let grid_ar = grid.width as f64 / grid.height as f64;
         let (width, height, cell_size) = if window_ar > grid_ar {
@@ -73,13 +80,17 @@ impl Renderer {
             ..self.config
         };
     }
-    pub fn draw_grid(&self, grid: &Grid) {
+    pub fn draw_grid(&self, grid: &Grid, draw_mode: DrawMode) {
         self.ctx
             .clear_rect(0., 0., self.config.width as f64, self.config.height as f64);
         for i in 0..grid.height {
             for j in 0..grid.width {
                 let (x, y) = self.get_offset(j, i);
                 let cell = grid.get(i, j);
+                let d_m = match cell {
+                    Cell::ShortestPath => DrawMode::Point,
+                    _ => draw_mode,
+                };
                 self.draw_cell(
                     x as f64,
                     y as f64,
@@ -87,6 +98,7 @@ impl Renderer {
                     self.config.cell_size,
                     cell.fill_color(),
                     cell.stroke_color(),
+                    d_m,
                 );
             }
         }
@@ -99,22 +111,45 @@ impl Renderer {
         height: f64,
         fill_color: &str,
         stroke_color: &str,
+        draw_mode: DrawMode,
     ) {
         // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
         // Caching will resolve it but it's not important right now
         self.ctx.set_fill_style(&JsValue::from(fill_color));
         let circle = Path2d::new().unwrap();
         let r = width / 2.;
-        circle.arc(x + r, y + r, r, 0., std::f64::consts::TAU).unwrap();
-        self.ctx.fill_with_path_2d(&circle);
-        //self.ctx.fill_rect(x, y, width, height);
+        let d_m = if draw_mode == DrawMode::Point {
+            circle
+                .arc(x + r, y + r, r / 2., 0., std::f64::consts::TAU)
+                .unwrap();
+            DrawMode::Circle
+        } else {
+            circle
+                .arc(x + r, y + r, r, 0., std::f64::consts::TAU)
+                .unwrap();
+            draw_mode
+        };
+        match d_m {
+            DrawMode::Rectangle => {
+                self.ctx.fill_rect(x, y, width, height);
+            }
+            _ => {
+                self.ctx.fill_with_path_2d(&circle);
+            }
+        }
         if let Some(stroke_w) = self.config.stroke_width {
             self.ctx.set_line_width(stroke_w);
             // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
             // Caching will resolve it but it's not important right now
             self.ctx.set_stroke_style(&JsValue::from(stroke_color));
-            //self.ctx.stroke_rect(x, y, width, height);
-            self.ctx.stroke_with_path(&circle);
+            match d_m {
+                DrawMode::Rectangle => {
+                    self.ctx.stroke_rect(x, y, width, height);
+                }
+                _ => {
+                    self.ctx.stroke_with_path(&circle);
+                }
+            }
         }
     }
     fn get_offset(&self, row: usize, column: usize) -> (f64, f64) {

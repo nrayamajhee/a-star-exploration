@@ -17,6 +17,7 @@ js-sys = "0.3.44"
 strum = "0.19"
 strum_macros = "0.19"
 priority-queue = "1.0.0"
+maud = "0.22.0"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by
 # logging them with `console.error`. This is great for development, but requires
@@ -49,7 +50,8 @@ features = [
 	"EventTarget",
 	"MouseEvent",
 	"Performance",
-	"Path2d"
+	"Path2d",
+	"HtmlInputElement"
 ]
 
 [profile.release]

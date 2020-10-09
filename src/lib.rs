@@ -1,4 +1,4 @@
-#![feature(deque_make_contiguous)]
+#![feature(proc_macro_hygiene)]
 
 mod macros;
 use std::cell::RefCell;

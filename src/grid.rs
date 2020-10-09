@@ -6,7 +6,7 @@ pub enum Cell {
     End,
     ShortestPath,
     Visiting,
-    Visited
+    Visited,
 }
 
 impl Cell {
@@ -51,6 +51,17 @@ impl Grid {
             width,
             height,
             data,
+        }
+    }
+    pub fn clear(&mut self) {
+        for i in 0..(self.width * self.height) {
+            let each = self.data.get_mut(i).unwrap();
+            match each {
+                Cell::Start | Cell::End => (),
+                _ => {
+                    *each = Cell::Path;
+                }
+            }
         }
     }
     pub fn get(&self, column: usize, row: usize) -> Cell {

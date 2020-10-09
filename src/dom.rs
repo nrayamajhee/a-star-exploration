@@ -2,15 +2,42 @@
 use crate::RcCell;
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{
-    Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement, HtmlStyleElement, Window,
+    Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement,
+    HtmlStyleElement, Window, HtmlInputElement
 };
 
 pub fn get_el(id: &str) -> Element {
-    document().get_element_by_id(id).unwrap()
+    document()
+        .get_element_by_id(id)
+        .unwrap_or_else(|| panic!("Element with id {} not found in document!", id))
 }
 
-pub fn insert_html_at(element: &Element, html: &str, location: &str) {
-    element.insert_adjacent_html(html, location).unwrap();
+pub fn event_as_input(event: &Event) -> HtmlInputElement {
+    event.target().unwrap().dyn_into::<HtmlInputElement>().unwrap()
+}
+
+pub enum HtmlPosition {
+    Before,
+    Start,
+    End,
+    After,
+}
+
+impl HtmlPosition {
+    fn as_str(&self) -> &'static str {
+        match self {
+            HtmlPosition::Before => "beforebegin",
+            HtmlPosition::Start => "afterbegin",
+            HtmlPosition::End => "beforeend",
+            HtmlPosition::After => "afterend",
+        }
+    }
+}
+
+pub fn insert_html_at(element: &Element, html: &str, location: HtmlPosition) {
+    element
+        .insert_adjacent_html(location.as_str(), html)
+        .unwrap();
 }
 
 pub fn window() -> Window {
