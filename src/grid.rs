@@ -1,4 +1,6 @@
-#[derive(Debug, Clone, Copy, PartialEq)]
+use strum_macros::EnumIter;
+
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, Eq, Hash)]
 pub enum Cell {
     Block,
     Path,

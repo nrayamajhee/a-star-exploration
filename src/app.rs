@@ -1,11 +1,13 @@
 use crate::{
     dom::{
         add_event_mut, add_style, body, document, event_as_input, get_el, insert_html_at,
-        loop_animation_frame, window, HtmlPosition,
+        loop_animation_frame, now, window, HtmlPosition,
     },
     AStar, Cell, DrawMode, Grid, Position, RcCell, Renderer,
 };
+use futures_channel::oneshot;
 use maud::html;
+use std::sync::{Arc, Mutex};
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlCanvasElement, MouseEvent};
 
@@ -23,14 +25,64 @@ pub enum AppEvent {
     None,
 }
 
-#[derive(Clone)]
+use crate::WorkerPool;
+use rayon::ThreadPool;
+
+pub struct RayonWorkers {
+    rayon_pool: Arc<ThreadPool>,
+    worker_pool: WorkerPool,
+}
+
+impl RayonWorkers {
+    pub fn new() -> Self {
+        let concurrency = window().navigator().hardware_concurrency() as usize;
+        let worker_pool = WorkerPool::new(concurrency).unwrap();
+        let rayon_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(concurrency)
+                .spawn_handler(|thread| Ok(worker_pool.run(|| thread.run()).unwrap()))
+                .build()
+                .unwrap(),
+        );
+        Self {
+            rayon_pool,
+            worker_pool,
+        }
+    }
+    pub async fn run<F, V>(clo: F, val: V) -> V
+    where
+        F: Fn() + 'static + Send,
+        V: Send + 'static,
+    {
+        let concurrency = window().navigator().hardware_concurrency() as usize;
+        let worker_pool = WorkerPool::new(concurrency).unwrap();
+        let rayon_pool = Arc::new(
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(concurrency)
+                .spawn_handler(|thread| Ok(worker_pool.run(|| thread.run()).unwrap()))
+                .build()
+                .unwrap(),
+        );
+        let (tx, rx) = oneshot::channel();
+        worker_pool
+            .run(move || {
+                rayon_pool.install(clo);
+                drop(tx.send(val));
+            })
+            .unwrap();
+        rx.await.unwrap()
+    }
+}
+
 pub struct App {
     grid: Grid,
     path: Vec<Position>,
+    dt_draw: Vec<f64>,
     canvas: HtmlCanvasElement,
     renderer: Renderer,
     graph: AStar,
     event: RcCell<AppEvent>,
+    rayon_workers: RayonWorkers,
 }
 
 impl App {
@@ -68,13 +120,13 @@ impl App {
         ",
         );
         let html = html! {
-            section#bottom-bar {
-                #div.left {
+            #bottom-bar {
+                .left {
                     button#play { "Play" }
                     button#step { "Step" }
                     button#clear { "Clear" }
                 }
-                #div.right {
+                .center {
                     input id="diag" type="checkbox" {}
                     label for="diag" {"Diagonal Search"}
                     p{"Left Click: Draw"}
@@ -86,14 +138,16 @@ impl App {
         .into_string();
         insert_html_at(&body(), html.as_str(), HtmlPosition::End);
         let event = RcCell::new(AppEvent::Resize);
-        let path = Vec::new();
+        let rayon_workers = RayonWorkers::new();
         let app = Self {
             grid,
-            path,
             graph,
             renderer,
             canvas,
             event,
+            rayon_workers,
+            path: Vec::new(),
+            dt_draw: Vec::new(),
         };
         app.bind_events();
         app
@@ -197,7 +251,21 @@ impl App {
                         self.renderer.resize(&self.canvas, &self.grid);
                     }
                     AppEvent::Play | AppEvent::Step => {
-                        crate::log!("STEP");
+                        //let graph = self.graph.clone();
+                        //let grid = Arc::new(Mutex::new(self.grid.clone()));
+                        //{
+                        //crate::log!("CRASHED THERE");
+                        //crate::par_fill(
+                        //Arc::new(Mutex::new(self.grid.clone())),
+                        //Arc::new(Mutex::new(self.graph.open.clone())),
+                        //Arc::new(Mutex::new(self.graph.closed.clone())),
+                        //true,
+                        //self.graph.start,
+                        //self.graph.target,
+                        //);
+                        //}
+                        //crate::log!("CRASHED THERE");
+                        //self.renderer.draw_grid(&grid.lock().unwrap(), DrawMode::Circle);
                         if self.graph.fill(&mut self.grid) {
                             self.path = self.graph.trace();
                             *event = AppEvent::Trace;

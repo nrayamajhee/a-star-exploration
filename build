@@ -1,0 +1,24 @@
+#!/bin/sh
+
+case $1 in
+	"b" | "build")
+		RUSTFLAGS='-C target-feature=+atomics,+bulk-memory' \
+		  cargo build --target wasm32-unknown-unknown --release -Z build-std=std,panic_abort
+		wasm-bindgen \
+		  --out-dir ./pkg --no-typescript --target no-modules --debug \
+		  $CARGO_TARGET_DIR/wasm32-unknown-unknown/release/a_star.wasm 
+	;;
+	"s" | "serve")
+		python3 server.py
+	;;
+	"r" | "run")
+		$0 build
+		$0 serve
+	;;
+	"w" | "watch")
+		cargo watch -w src -w Cargo.toml -s "$0 run"
+	;;
+	*)
+		echo "build [(b)uild | (s)erve | (r)un | (w)atch]"
+esac
+

@@ -2,6 +2,8 @@ use crate::{
     dom::{add_event, body},
     grid::{Cell, Grid},
 };
+use std::collections::HashMap;
+use strum::IntoEnumIterator;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, Path2d};
 
@@ -25,6 +27,7 @@ pub enum DrawMode {
 pub struct Renderer {
     ctx: CanvasRenderingContext2d,
     config: RendererConfig,
+    colors: HashMap<Cell, (JsValue, JsValue)>, // caching color names so that wasm doesn't create new string
 }
 
 impl Renderer {
@@ -38,6 +41,17 @@ impl Renderer {
             .unwrap()
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
+
+        let mut colors = HashMap::new();
+        for each in Cell::iter() {
+            colors.insert(
+                each,
+                (
+                    JsValue::from(each.fill_color()),
+                    JsValue::from(each.stroke_color()),
+                ),
+            );
+        }
         Self {
             ctx,
             config: RendererConfig {
@@ -47,6 +61,7 @@ impl Renderer {
                 cell_size: 0.,
                 stroke_width,
             },
+            colors,
         }
     }
     pub fn resize(&mut self, canvas: &HtmlCanvasElement, grid: &Grid) {
@@ -96,8 +111,7 @@ impl Renderer {
                     y as f64,
                     self.config.cell_size,
                     self.config.cell_size,
-                    cell.fill_color(),
-                    cell.stroke_color(),
+                    cell,
                     d_m,
                 );
             }
@@ -109,13 +123,11 @@ impl Renderer {
         y: f64,
         width: f64,
         height: f64,
-        fill_color: &str,
-        stroke_color: &str,
+        cell: Cell,
         draw_mode: DrawMode,
     ) {
-        // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
-        // Caching will resolve it but it's not important right now
-        self.ctx.set_fill_style(&JsValue::from(fill_color));
+        let (fill_color, stroke_color) = self.colors.get(&cell).unwrap();
+        self.ctx.set_fill_style(fill_color);
         let circle = Path2d::new().unwrap();
         let r = width / 2.;
         let d_m = if draw_mode == DrawMode::Point {
@@ -139,9 +151,7 @@ impl Renderer {
         }
         if let Some(stroke_w) = self.config.stroke_width {
             self.ctx.set_line_width(stroke_w);
-            // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
-            // Caching will resolve it but it's not important right now
-            self.ctx.set_stroke_style(&JsValue::from(stroke_color));
+            self.ctx.set_stroke_style(stroke_color);
             match d_m {
                 DrawMode::Rectangle => {
                     self.ctx.stroke_rect(x, y, width, height);

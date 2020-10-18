@@ -1,7 +1,7 @@
 use crate::{Cell, Grid};
 use js_sys::Math;
-
 use priority_queue::PriorityQueue;
+use rayon::prelude::*;
 use std::collections::HashSet;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -23,6 +23,7 @@ pub fn is_odd(num: usize) -> bool {
     num & 1 == 0
 }
 
+use crate::RayonWorkers;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 
@@ -36,6 +37,17 @@ pub enum Direction {
     SouthWest,
     West,
     NorthWest,
+}
+
+impl From<u8> for Direction {
+    fn from(from: u8) -> Self {
+        for each in Direction::iter() {
+            if each as u8 == from {
+                return each;
+            }
+        }
+        Direction::NorthWest
+    }
 }
 
 impl Direction {
@@ -136,13 +148,105 @@ impl Node {
     }
 }
 
-#[derive(Clone)]
-pub struct AStar {
-    open: PriorityQueue<Node, Cost>,
-    closed: HashSet<Position>,
+use std::sync::{Arc, Mutex};
+
+pub fn par_fill(
+    grid: std::sync::Arc<std::sync::Mutex<Grid>>,
+    open: std::sync::Arc<std::sync::Mutex<PriorityQueue<Node, Cost>>>,
+    closed: std::sync::Arc<std::sync::Mutex<HashSet<Position>>>,
+    diagonal: bool,
     start: Position,
     target: Position,
+) -> bool {
+    if let Some(top) = open.lock().expect("Cannot lock open").peek() {
+        let (top, _) = top;
+        if !open.lock().expect("Cannot lock open").is_empty() {
+            if top.pos == target {
+                return true;
+            } else {
+                par_find(grid.clone(), open.clone(), closed.clone(), true, target);
+                for (each, _) in open.lock().expect("cannot lock open").iter() {
+                    if each.pos != start && each.pos != target {
+                        grid.lock()
+                            .expect("cannot lock grid")
+                            .set(each.pos.x, each.pos.y, Cell::Visiting);
+                    }
+                }
+                for each in closed.lock().expect("grid").iter() {
+                    if *each != start && *each != target {
+                        grid.lock().expect("grid").set(each.x, each.y, Cell::Visited);
+                    }
+                }
+                if top.pos != start && top.pos != target {
+                    grid.lock()
+                        .expect("grid")
+                        .set(top.pos.x, top.pos.y, Cell::ShortestPath);
+                }
+            }
+        }
+    }
+    false
+}
+
+pub fn par_find(
+    grid: std::sync::Arc<std::sync::Mutex<Grid>>,
+    open: std::sync::Arc<std::sync::Mutex<PriorityQueue<Node, Cost>>>,
+    closed: std::sync::Arc<std::sync::Mutex<HashSet<Position>>>,
     diagonal: bool,
+    target: Position,
+) {
+    let (current_node, current_cost) = open.lock().unwrap().pop().unwrap();
+    closed.lock().unwrap().insert(current_node.pos);
+    if current_node.pos == target {
+        return;
+    }
+    RayonWorkers::run(
+        move || {
+            (0..8).into_par_iter().for_each(|i| {
+                if is_odd(i as usize) || diagonal {
+                    let dir = Direction::from(i as u8);
+                    if let Ok(mut neighbour) =
+                        current_node.get_neighbour(dir, &grid.lock().unwrap())
+                    {
+                        if !closed.lock().unwrap().contains(&neighbour.pos) {
+                            //let g_cost = neighbour.pos.h_cost(&self.target);
+                            let cost = current_cost.g_cost + dir.g_cost();
+                            let h_cost = neighbour.pos.h_cost(&target);
+                            let neighbour_cost = Cost {
+                                g_cost: cost,
+                                h_cost,
+                            };
+                            let mut in_open = false;
+                            for (old_n, old_n_cost) in open.lock().unwrap().iter_mut() {
+                                if old_n.pos == neighbour.pos {
+                                    if cost < old_n_cost.g_cost {
+                                        old_n.set_parent(current_node.clone());
+                                        *old_n_cost = neighbour_cost;
+                                    }
+                                    in_open = true;
+                                    break;
+                                }
+                            }
+                            if !in_open {
+                                neighbour.set_parent(current_node.clone());
+                                open.lock().unwrap().push(neighbour, neighbour_cost);
+                            }
+                        }
+                    }
+                }
+            });
+        },
+        false,
+    );
+}
+
+#[derive(Clone)]
+pub struct AStar {
+    pub open: PriorityQueue<Node, Cost>,
+    pub closed: HashSet<Position>,
+    pub start: Position,
+    pub target: Position,
+    pub diagonal: bool,
 }
 
 impl AStar {
@@ -191,6 +295,7 @@ impl AStar {
         if current_node.pos == self.target {
             return;
         }
+        let diagonal = self.diagonal;
         for (i, dir) in Direction::iter().enumerate() {
             if is_odd(i) || self.diagonal {
                 if let Ok(mut neighbour) = current_node.get_neighbour(dir, grid) {
