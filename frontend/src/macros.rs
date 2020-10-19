@@ -1,4 +1,9 @@
 #[macro_export]
+macro_rules! console_log {
+    ($($t:tt)*) => (crate::log(&format_args!($($t)*).to_string()))
+}
+
+#[macro_export]
 macro_rules! log {
     ($($x:expr),*) => {
         {
@@ -11,14 +16,14 @@ macro_rules! log {
                     msg.push_str(&format!("{:?} ",$x));
                 }
             )*
-            web_sys::console::log_1(&wasm_bindgen::JsValue::from_str(&msg));
+            crate::log(&msg);
         }
     };
 }
 
 #[macro_export]
 macro_rules! use_mod {
-    ($($mod:ident),+,$(,)?) => {
+    ($($mod:ident),+$(,)?) => {
         $(
             mod $mod;
             #[doc(inine)]

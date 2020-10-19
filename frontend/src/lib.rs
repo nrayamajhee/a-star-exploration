@@ -1,6 +1,7 @@
 #![feature(proc_macro_hygiene)]
 
 mod macros;
+use futures_channel::oneshot::{self, Receiver};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -17,6 +18,14 @@ impl<T> RcCell<T> {
     }
 }
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+    #[wasm_bindgen(js_namespace = console, js_name = log)]
+    fn logv(x: &JsValue);
+}
+
 use std::ops::Deref;
 
 impl<T> Deref for RcCell<T> {
@@ -27,14 +36,7 @@ impl<T> Deref for RcCell<T> {
     }
 }
 
-crate::use_mod!(
-    app,
-    dom,
-    grid,
-    renderer,
-    start,
-    node,
-);
+crate::use_mod!(app, dom, renderer, start);
 
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
@@ -42,9 +44,10 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[doc(hidden)]
 #[wasm_bindgen(start)]
-pub async fn run() -> Result<(), JsValue> {
+pub fn run() -> Result<(), JsValue> {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
+    crate::log!("Status");
     start::start();
     Ok(())
 }

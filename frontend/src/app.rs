@@ -1,11 +1,14 @@
 use crate::{
     dom::{
         add_event_mut, add_style, body, document, event_as_input, get_el, insert_html_at,
-        loop_animation_frame, window, HtmlPosition,
+        loop_animation_frame, now, window, HtmlPosition,
     },
-    AStar, Cell, DrawMode, Grid, Position, RcCell, Renderer,
+    DrawMode, RcCell, Renderer,
 };
+use futures_channel::oneshot;
+use graph::{AStar, Cell, Grid, Position};
 use maud::html;
+use std::sync::{Arc, Mutex};
 use wasm_bindgen::JsCast;
 use web_sys::{HtmlCanvasElement, MouseEvent};
 
@@ -23,10 +26,10 @@ pub enum AppEvent {
     None,
 }
 
-#[derive(Clone)]
 pub struct App {
     grid: Grid,
     path: Vec<Position>,
+    dt_draw: Vec<f64>,
     canvas: HtmlCanvasElement,
     renderer: Renderer,
     graph: AStar,
@@ -68,13 +71,13 @@ impl App {
         ",
         );
         let html = html! {
-            section#bottom-bar {
-                #div.left {
+            #bottom-bar {
+                .left {
                     button#play { "Play" }
                     button#step { "Step" }
                     button#clear { "Clear" }
                 }
-                #div.right {
+                .center {
                     input id="diag" type="checkbox" {}
                     label for="diag" {"Diagonal Search"}
                     p{"Left Click: Draw"}
@@ -86,14 +89,14 @@ impl App {
         .into_string();
         insert_html_at(&body(), html.as_str(), HtmlPosition::End);
         let event = RcCell::new(AppEvent::Resize);
-        let path = Vec::new();
         let app = Self {
             grid,
-            path,
             graph,
             renderer,
             canvas,
             event,
+            path: Vec::new(),
+            dt_draw: Vec::new(),
         };
         app.bind_events();
         app
@@ -197,7 +200,6 @@ impl App {
                         self.renderer.resize(&self.canvas, &self.grid);
                     }
                     AppEvent::Play | AppEvent::Step => {
-                        crate::log!("STEP");
                         if self.graph.fill(&mut self.grid) {
                             self.path = self.graph.trace();
                             *event = AppEvent::Trace;

@@ -1,7 +1,7 @@
-use crate::{
-    dom::{add_event, body},
-    grid::{Cell, Grid},
-};
+use crate::dom::{add_event, body};
+use graph::{Cell, Grid, Position};
+use std::collections::HashMap;
+use strum::IntoEnumIterator;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, Path2d};
 
@@ -25,6 +25,8 @@ pub enum DrawMode {
 pub struct Renderer {
     ctx: CanvasRenderingContext2d,
     config: RendererConfig,
+    colors: HashMap<Cell, (JsValue, JsValue)>, // caching color names so that wasm doesn't create new string
+    path: Path2d,
 }
 
 impl Renderer {
@@ -38,6 +40,18 @@ impl Renderer {
             .unwrap()
             .dyn_into::<CanvasRenderingContext2d>()
             .unwrap();
+
+        let mut colors = HashMap::new();
+        for each in Cell::iter() {
+            colors.insert(
+                each,
+                (
+                    JsValue::from(each.fill_color()),
+                    JsValue::from(each.stroke_color()),
+                ),
+            );
+        }
+        let path = Path2d::new().unwrap();
         Self {
             ctx,
             config: RendererConfig {
@@ -47,6 +61,8 @@ impl Renderer {
                 cell_size: 0.,
                 stroke_width,
             },
+            colors,
+            path,
         }
     }
     pub fn resize(&mut self, canvas: &HtmlCanvasElement, grid: &Grid) {
@@ -91,32 +107,15 @@ impl Renderer {
                     Cell::ShortestPath => DrawMode::Point,
                     _ => draw_mode,
                 };
-                self.draw_cell(
-                    x as f64,
-                    y as f64,
-                    self.config.cell_size,
-                    self.config.cell_size,
-                    cell.fill_color(),
-                    cell.stroke_color(),
-                    d_m,
-                );
+                self.draw_cell(x as f64, y as f64, cell, d_m);
             }
         }
     }
-    pub fn draw_cell(
-        &self,
-        x: f64,
-        y: f64,
-        width: f64,
-        height: f64,
-        fill_color: &str,
-        stroke_color: &str,
-        draw_mode: DrawMode,
-    ) {
-        // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
-        // Caching will resolve it but it's not important right now
-        self.ctx.set_fill_style(&JsValue::from(fill_color));
+    pub fn draw_cell(&self, x: f64, y: f64, cell: Cell, draw_mode: DrawMode) {
+        let (fill_color, stroke_color) = self.colors.get(&cell).unwrap();
+        self.ctx.set_fill_style(fill_color);
         let circle = Path2d::new().unwrap();
+        let width = self.config.cell_size;
         let r = width / 2.;
         let d_m = if draw_mode == DrawMode::Point {
             circle
@@ -131,22 +130,21 @@ impl Renderer {
         };
         match d_m {
             DrawMode::Rectangle => {
-                self.ctx.fill_rect(x, y, width, height);
+                self.ctx.fill_rect(x, y, width, width);
             }
             _ => {
                 self.ctx.fill_with_path_2d(&circle);
             }
         }
-        if let Some(stroke_w) = self.config.stroke_width {
-            self.ctx.set_line_width(stroke_w);
-            // This is taking a performance hit because JSValue copies static str to heap and making JS GC its owner
-            // Caching will resolve it but it's not important right now
-            self.ctx.set_stroke_style(&JsValue::from(stroke_color));
+        if let Some(w) = self.config.stroke_width {
+            self.ctx.set_line_width(w);
+            self.ctx.set_stroke_style(stroke_color);
             match d_m {
                 DrawMode::Rectangle => {
-                    self.ctx.stroke_rect(x, y, width, height);
+                    self.ctx.stroke_rect(x, y, width, width);
                 }
                 _ => {
+                    self.ctx.begin_path();
                     self.ctx.stroke_with_path(&circle);
                 }
             }

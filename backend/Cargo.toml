@@ -1,0 +1,13 @@
+[package]
+name = "backend"
+version = "0.1.0"
+authors = ["nrayamajhee <nishan@rayamajhee.com>"]
+edition = "2018"
+
+[dependencies]
+tokio = { version = "0.2", features = ["full"] }
+warp = "0.2"
+graph = { path = "../graph" }
+serde = { version = "1.0.117", features=["derive"] }
+priority-queue = "1.0.2"
+serde_json = "1.0.59"

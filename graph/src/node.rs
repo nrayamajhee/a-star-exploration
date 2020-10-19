@@ -1,10 +1,13 @@
 use crate::{Cell, Grid};
-use js_sys::Math;
-
 use priority_queue::PriorityQueue;
+use rayon::prelude::*;
 use std::collections::HashSet;
+use std::sync::{Arc, Mutex};
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
+use serde::{Serialize, Deserialize};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, Serialize, Deserialize)]
 pub struct Position {
     pub x: usize,
     pub y: usize,
@@ -23,9 +26,6 @@ pub fn is_odd(num: usize) -> bool {
     num & 1 == 0
 }
 
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter)]
 pub enum Direction {
     North,
@@ -36,6 +36,17 @@ pub enum Direction {
     SouthWest,
     West,
     NorthWest,
+}
+
+impl From<u8> for Direction {
+    fn from(from: u8) -> Self {
+        for each in Direction::iter() {
+            if each as u8 == from {
+                return each;
+            }
+        }
+        Direction::NorthWest
+    }
 }
 
 impl Direction {
@@ -115,6 +126,28 @@ impl Node {
             parent: None,
         }
     }
+    pub fn new_from_pos(pos: Position) -> Self {
+        Self { pos, parent: None }
+    }
+    pub fn get_neighbour_grid_config(
+        &self,
+        direction: Direction,
+        grid: &GridConfig,
+    ) -> Result<Self, &'static str> {
+        let (x, y) = direction.get_coordinate(self.pos.x as isize, self.pos.y as isize);
+        let (width, height) = grid.dimension;
+        if x >= 0 && y >= 0 && x < width as isize && y < height as isize {
+            let pos = Position::new(x as usize, y as usize);
+            let neighbour = Self {
+                pos,
+                parent: Some(Box::new(self.clone())),
+            };
+            if grid.blocked.contains(&neighbour.pos) {
+                return Ok(neighbour);
+            }
+        }
+        Err("This neighbour is outside the board!")
+    }
     pub fn get_neighbour(&self, direction: Direction, grid: &Grid) -> Result<Self, &'static str> {
         let (x, y) = direction.get_coordinate(self.pos.x as isize, self.pos.y as isize);
         if x >= 0 && y >= 0 && x < grid.width as isize && y < grid.height as isize {
@@ -138,34 +171,31 @@ impl Node {
 
 #[derive(Clone)]
 pub struct AStar {
-    open: PriorityQueue<Node, Cost>,
-    closed: HashSet<Position>,
-    start: Position,
-    target: Position,
-    diagonal: bool,
+    pub open: PriorityQueue<Node, Cost>,
+    pub closed: HashSet<Position>,
+    pub start: Position,
+    pub target: Position,
+    pub diagonal: bool,
 }
 
-impl AStar {
-    pub fn not_start_nor_end(&self, pos: Position) -> bool {
-        pos != self.start && pos != self.target
+fn trace(open: Arc<Mutex<PriorityQueue<Node, Cost>>>) -> Vec<Position> {
+    let mut path = Vec::new();
+    if let Some((head, _)) = open.lock().unwrap().pop() {
+        let mut current = head;
+        while let Some(parent) = current.parent {
+            path.push(parent.pos);
+            current = *parent;
+        }
     }
-    pub fn new(grid: &mut Grid) -> Self {
-        let (w, h) = (grid.width, grid.height);
-        let get_x_y = || {
-            let rand = Math::random();
-            let x = (rand * w as f64) as usize;
-            let y = (rand * h as f64) as usize;
-            (x, y)
-        };
+    path
+}
+
+
+impl AStar {
+    pub fn new(start: Position, target: Position) -> Self {
         let mut open = PriorityQueue::new();
         let closed = HashSet::new();
-        let (x, y) = get_x_y();
-        grid.set(x, y, Cell::Start);
-        let start = Position::new(x, y);
-        let start_node = Node::new(x, y);
-        let (x, y) = get_x_y();
-        grid.set(x, y, Cell::End);
-        let target = Position::new(x, y);
+        let start_node = Node::new_from_pos(start);
         open.push(
             start_node,
             Cost {
@@ -181,6 +211,9 @@ impl AStar {
             target,
             diagonal,
         }
+    }
+    pub fn not_start_nor_end(&self, pos: Position) -> bool {
+        pos != self.start && pos != self.target
     }
     pub fn diagonal(&mut self, set_diagonal: bool) {
         self.diagonal = set_diagonal;
@@ -283,4 +316,77 @@ impl AStar {
         self.open.clear();
         path
     }
+}
+
+pub fn par_solve(
+    start: Position,
+    grid: &GridConfig,
+    graph: &GraphConfig,
+) -> Option<Vec<Position>> {
+    if let Some(top) = graph.open.lock().expect("Cannot lock open").peek() {
+        let (top, _) = top;
+        if !graph.open.lock().expect("Cannot lock open").is_empty() {
+            if top.pos == graph.target {
+                return Some(trace(graph.open.clone()));
+            } else {
+                par_step(grid, graph);
+                par_solve(start, grid, graph);
+            }
+        }
+    }
+    None
+}
+
+pub struct GridConfig {
+    pub dimension: (usize, usize),
+    pub blocked: HashSet<Position>,
+}
+
+pub struct GraphConfig {
+    pub open: Arc<Mutex<PriorityQueue<Node, Cost>>>,
+    pub closed: Arc<Mutex<HashSet<Position>>>,
+    pub diagonal: bool,
+    pub target: Position,
+}
+
+fn par_step(grid: &GridConfig, graph: &GraphConfig) {
+    let (current_node, current_cost) = graph.open.lock().unwrap().pop().unwrap();
+    graph.closed.lock().unwrap().insert(current_node.pos);
+    if current_node.pos == graph.target {
+        return;
+    }
+    let range = if graph.diagonal { 0..4 } else { 0..8 };
+    range.into_par_iter().for_each(|i| {
+        let dir = if graph.diagonal {
+            Direction::from(i as u8)
+        } else {
+            Direction::from((i * 2) as u8)
+        };
+        if let Ok(mut neighbour) = current_node.get_neighbour_grid_config(dir, grid) {
+            if !graph.closed.lock().unwrap().contains(&neighbour.pos) {
+                //let g_cost = neighbour.pos.h_cost(&self.target);
+                let cost = current_cost.g_cost + dir.g_cost();
+                let h_cost = neighbour.pos.h_cost(&graph.target);
+                let neighbour_cost = Cost {
+                    g_cost: cost,
+                    h_cost,
+                };
+                let mut in_open = false;
+                for (old_n, old_n_cost) in graph.open.lock().unwrap().iter_mut() {
+                    if old_n.pos == neighbour.pos {
+                        if cost < old_n_cost.g_cost {
+                            old_n.set_parent(current_node.clone());
+                            *old_n_cost = neighbour_cost;
+                        }
+                        in_open = true;
+                        break;
+                    }
+                }
+                if !in_open {
+                    neighbour.set_parent(current_node.clone());
+                    graph.open.lock().unwrap().push(neighbour, neighbour_cost);
+                }
+            }
+        }
+    });
 }
