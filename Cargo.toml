@@ -2,5 +2,4 @@
 members = [
 	"backend",
 	"frontend",
-	"graph"
 ]

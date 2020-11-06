@@ -1,11 +1,11 @@
 #[macro_export]
-macro_rules! console_log {
+macro_rules! log_format {
     ($($t:tt)*) => (crate::log(&format_args!($($t)*).to_string()))
 }
 
 #[macro_export]
 macro_rules! log {
-    ($($x:expr),*) => {
+    ($($x:expr),+$(,)?) => {
         {
             let mut msg = String::new();
             use std::any::Any;
@@ -14,6 +14,24 @@ macro_rules! log {
                     msg.push_str(&format!("{} ", s));
                 } else {
                     msg.push_str(&format!("{:?} ",$x));
+                }
+            )*
+            crate::log(&msg);
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! log_pretty {
+    ($($x:expr),+$(,)?) => {
+        {
+            let mut msg = String::new();
+            use std::any::Any;
+            $(
+                if let Some(s) = (&$x as &dyn Any).downcast_ref::<&dyn std::fmt::Display>() {
+                    msg.push_str(&format!("{} ", s));
+                } else {
+                    msg.push_str(&format!("{:#?} ",$x));
                 }
             )*
             crate::log(&msg);

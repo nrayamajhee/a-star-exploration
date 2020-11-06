@@ -1,4 +1,4 @@
-use graph::{Cell, Grid};
+use a_star_graph::{AStarBidirectional, Grid};
 use js_sys::Math;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlCanvasElement;
@@ -8,7 +8,6 @@ use crate::{
     dom::{add_style, body, create_el},
     renderer::Renderer,
 };
-use graph::{AStar, Position};
 
 /// The entry point to our app
 pub fn start() {
@@ -19,7 +18,7 @@ pub fn start() {
             height: 100vh;
             margin: 0;
             overflow: hidden;
-            font: 16px/1.5 sans-serif;
+            font: 16px/1 sans-serif;
             color: white;
             display: flex;
             flex-direction: column;
@@ -34,22 +33,10 @@ pub fn start() {
     let canvas = create_el("canvas");
     body().append_child(&canvas).unwrap();
     let canvas = canvas.dyn_into::<HtmlCanvasElement>().unwrap();
-    let mut grid = Grid::new(50, 25);
-    let (w, h) = (grid.width, grid.height);
-    let get_x_y = || {
-        let rand = Math::random();
-        let x = (rand * w as f64) as usize;
-        let y = (rand * h as f64) as usize;
-        (x, y)
-    };
-    let (x, y) = get_x_y();
-    grid.set(x, y, Cell::Start);
-    let target = Position::new(x, y);
-    let (x, y) = get_x_y();
-    grid.set(x, y, Cell::End);
-    let start = Position::new(x, y);
-    let renderer = Renderer::new(&canvas, 4., Some(2.));
-    let graph = AStar::new(start, target);
+    let renderer = Renderer::new(&canvas, 0., None);
+    let mut grid = Grid::new(100, 50);
+    let (start, target) = grid.set_rand_start_n_end(&|| Math::random());
+    let graph = AStarBidirectional::new(start, target, false, false, false);
     let app = App::new(canvas, grid, graph, renderer);
     app.start();
 }

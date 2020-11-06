@@ -1,9 +1,12 @@
 #![allow(dead_code)]
 use crate::RcCell;
+use serde::{Deserialize, Serialize};
+use wasm_bindgen::JsValue;
 use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen_futures::{future_to_promise, JsFuture};
 use web_sys::{
-    Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement,
-    HtmlStyleElement, Window, HtmlInputElement
+    Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement, HtmlInputElement,
+    HtmlStyleElement, Request, RequestInit, Response, Window,
 };
 
 pub fn get_el(id: &str) -> Element {
@@ -12,8 +15,19 @@ pub fn get_el(id: &str) -> Element {
         .unwrap_or_else(|| panic!("Element with id {} not found in document!", id))
 }
 
+pub fn get_value(id: &str) -> String {
+    get_el(id)
+        .dyn_into::<HtmlInputElement>()
+        .unwrap_or_else(|e| panic!("Element with id {} not an input element!:\n{:#?}", id, e))
+        .value()
+}
+
 pub fn event_as_input(event: &Event) -> HtmlInputElement {
-    event.target().unwrap().dyn_into::<HtmlInputElement>().unwrap()
+    event
+        .target()
+        .unwrap()
+        .dyn_into::<HtmlInputElement>()
+        .unwrap()
 }
 
 pub enum HtmlPosition {
@@ -140,4 +154,76 @@ where
     }) as Box<dyn FnMut()>));
     *t.borrow_mut() = now();
     request_animation_frame(g.borrow().as_ref().unwrap());
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum FetchMethod {
+    Get,
+    Post(JsValue),
+}
+
+impl FetchMethod {
+    pub fn post<S: Serialize>(body: &S) -> Self {
+        FetchMethod::Post(serde_json::to_string(body).unwrap().into())
+    }
+}
+
+pub async fn fetch(
+    url: String,
+    method: FetchMethod,
+    content_type: Option<&str>,
+) -> Result<JsValue, JsValue> {
+    let mut opts = RequestInit::new();
+    if let FetchMethod::Post(body) = method {
+        opts.method("POST");
+        opts.body(Some(&body));
+    } else {
+        opts.method("GET");
+    }
+    let request = Request::new_with_str_and_init(&url, &opts)?;
+    if let Some(content_type) = content_type {
+        request.headers().set("Content-Type", content_type)?;
+    }
+    let resp_value = JsFuture::from(window().fetch_with_request(&request)).await?;
+    assert!(resp_value.is_instance_of::<Response>());
+    let resp: Response = resp_value.dyn_into().unwrap();
+    let json = JsFuture::from(resp.json()?).await?;
+    Ok(json)
+}
+
+pub async fn fetch_json<T: for<'a> Deserialize<'a>>(url: String, method: FetchMethod) -> T {
+    let json = fetch(url, method, Some("application/json"))
+        .await
+        .unwrap_or_else(|err| panic!("Couldn't fetch response:\n{:?}", err));
+    json.into_serde::<T>()
+        .expect("Couldn't serialize API json into response!")
+}
+
+pub fn try_fetch_then<F: 'static + Fn(JsValue)>(url: String, method: FetchMethod, closure: F) {
+    let resolve =
+        Closure::wrap(Box::new(move |json: JsValue| closure(json)) as Box<dyn FnMut(JsValue)>);
+    let m = method.clone();
+    let reject = Closure::wrap(Box::new(move |err| {
+        crate::log!("Failed to", m, "data!\nError:\n", err);
+    }) as Box<dyn FnMut(JsValue)>);
+    let _ = future_to_promise(fetch(url, method, Some("application/json")))
+        .then(&resolve)
+        .catch(&reject);
+    resolve.forget();
+    reject.forget();
+}
+
+pub fn fetch_then<T: for<'a> Deserialize<'a>, F: 'static + Fn(T)>(
+    url: String,
+    method: FetchMethod,
+    closure: F,
+) {
+    try_fetch_then(url, method, move |json: JsValue| {
+        closure(json.into_serde::<T>().unwrap_or_else(|err| {
+            panic!(
+                "Couldn't deserialize response into the given type!\n{:?}",
+                err
+            )
+        }));
+    });
 }

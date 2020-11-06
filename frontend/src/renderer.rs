@@ -1,5 +1,5 @@
 use crate::dom::{add_event, body};
-use graph::{Cell, Grid, Position};
+use a_star_graph::{Cell, Grid};
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use wasm_bindgen::{JsCast, JsValue};
@@ -67,7 +67,7 @@ impl Renderer {
     }
     pub fn resize(&mut self, canvas: &HtmlCanvasElement, grid: &Grid) {
         let width = body().offset_width();
-        let height = body().offset_height() - 40;
+        let height = body().offset_height() - 80;
         let window_ar = width as f64 / height as f64;
         let grid_ar = grid.width as f64 / grid.height as f64;
         let (width, height, cell_size) = if window_ar > grid_ar {

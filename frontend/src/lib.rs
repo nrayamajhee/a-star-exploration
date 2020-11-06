@@ -1,7 +1,5 @@
-#![feature(proc_macro_hygiene)]
-
+#![feature(proc_macro_hygiene, async_closure)]
 mod macros;
-use futures_channel::oneshot::{self, Receiver};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
@@ -36,7 +34,8 @@ impl<T> Deref for RcCell<T> {
     }
 }
 
-crate::use_mod!(app, dom, renderer, start);
+pub mod dom;
+crate::use_mod!(app, renderer, start);
 
 #[cfg(feature = "wee_alloc")]
 #[global_allocator]
@@ -44,10 +43,8 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
 #[doc(hidden)]
 #[wasm_bindgen(start)]
-pub fn run() -> Result<(), JsValue> {
+pub fn run() {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
-    crate::log!("Status");
     start::start();
-    Ok(())
 }
