@@ -2,18 +2,22 @@
 
 case $1 in
 	"b" | "build")
-		cd graph && cargo build
-		cd frontend && wasm-pack build
-		cd backend && cargo build
-		cd frontend/www && npm install
+		case $2 in
+			"b" | "backend")
+				cd graph && cargo build
+				cd ../backend && cargo build
+			;;
+			"f" | "frontend")
+				cd graph && cargo build
+				cd ../frontend && wasm-pack build
+				cd www && npm install && npm run build
+			;;
+			*)
+				echo "build build [(f)rontend | (b)ackedn]"
+		esac
 	;;
 	"s" | "serve")
 		cd frontend/www && npm start
-	;;
-	"r" | "run")
-		$0 build
-		$0 install
-		$0 serve
 	;;
 	"w" | "watch")
 		case $2 in
