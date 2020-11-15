@@ -337,7 +337,7 @@ impl App {
                         self.multithreaded = *multi;
                     }
                     AppEvent::Bidirectional(bidir) => {
-                        self.graph.bidirectional = *bidir;
+                        self.graph.set_bidirectional(*bidir);
                     }
                     AppEvent::Solve => {
                         let mut blocked = Vec::new();
@@ -359,7 +359,7 @@ impl App {
                                 start,
                                 target,
                                 multithreaded: self.multithreaded,
-                                bidirectional: self.graph.bidirectional,
+                                bidirectional: self.graph.bidirectional(),
                             },
                         };
                         let res = self.response.clone();

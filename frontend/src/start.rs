@@ -1,4 +1,4 @@
-use a_star_graph::{AStarBidirectional, Grid};
+use a_star_graph::{AStarBidirectional, AStarConfig, Grid};
 use js_sys::Math;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlCanvasElement;
@@ -36,7 +36,14 @@ pub fn start() {
     let renderer = Renderer::new(&canvas, 0., None);
     let mut grid = Grid::new(100, 50);
     let (start, target) = grid.set_rand_start_n_end(&|| Math::random());
-    let graph = AStarBidirectional::new(start, target, false, false, false);
+    let graph = AStarBidirectional::new(AStarConfig {
+        start,
+        target,
+        diagonal: false,
+        multithreaded: false,
+        bidirectional: false,
+    });
+    //start, target, false, false, false);
     let app = App::new(canvas, grid, graph, renderer);
     app.start();
 }

@@ -2,6 +2,7 @@ use crate::{Cell, Grid, GridSet};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
+use std::fmt;
 use std::hash::{Hash, Hasher};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -10,6 +11,12 @@ use strum_macros::EnumIter;
 pub struct Position {
     pub x: usize,
     pub y: usize,
+}
+
+impl fmt::Display for Position {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
 }
 
 impl Position {

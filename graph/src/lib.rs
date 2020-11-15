@@ -11,27 +11,6 @@ pub use node::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AStarConfig {
-    pub start: Position,
-    pub target: Position,
-    pub diagonal: bool,
-    pub multithreaded: bool,
-    pub bidirectional: bool,
-}
-
-impl Default for AStarConfig {
-    fn default() -> Self {
-        Self {
-            diagonal: true,
-            start: Position::new(0, 0),
-            target: Position::new(0, 0),
-            multithreaded: false,
-            bidirectional: false,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize)]
 pub struct Request {
     pub dimension: (usize, usize),
     pub blocked: Vec<Position>,

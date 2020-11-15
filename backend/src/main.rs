@@ -7,7 +7,7 @@ use warp::Filter;
 fn solve(request: Request) -> String {
     let graph = request.a_star;
     let mut msg = format!(
-        "{:?} to {:?} with {} blockades",
+        "{} -> {} \nBlockades: {}",
         graph.start,
         graph.target,
         request.blocked.len()
@@ -19,31 +19,24 @@ fn solve(request: Request) -> String {
         set,
     };
     if graph.diagonal {
-        msg.push_str(" with diagonal search")
+        msg.push_str("\nWith diagonal search")
     }
     if graph.bidirectional {
-        msg.push_str(" with bidirectional search")
+        msg.push_str("\nWith bidirectional search")
     }
     if graph.multithreaded {
         msg.push_str(&format!(
-            "Multithreaded from a pool of {} threads{}.",
+            "\nMultithreaded from a pool of {} threads.",
             rayon::current_num_threads(),
-            msg
         ));
     } else {
-        msg.push_str(&format!("Single threaded{}.", msg))
+        msg.push_str("\nSingle threaded.")
     }
-    let mut a_s = AStarBidirectional::new(
-        graph.start,
-        graph.target,
-        graph.bidirectional,
-        graph.diagonal,
-        graph.multithreaded,
-    );
+    let mut a_s = AStarBidirectional::new(graph);
     let then = Instant::now();
     let path = a_s.solve(GridType::Set(&grid));
     let time = then.elapsed().as_millis() as usize;
-    println!("{} Took: {}ms", msg, time);
+    println!("{}\nTook: {}ms", msg, time);
     let (open, closed) = a_s.get_open_and_closed_list();
     let response = Response {
         path,
@@ -57,7 +50,7 @@ fn solve(request: Request) -> String {
 #[tokio::main]
 async fn main() {
     //rayon::ThreadPoolBuilder::new()
-    //.num_threads(16)
+    //.num_threads(4)
     //.build_global()
     //.unwrap();
     let cors = warp::cors()
