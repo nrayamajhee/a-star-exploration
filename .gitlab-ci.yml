@@ -3,10 +3,8 @@ image: nrayamajhee/arch-wasm-pack
 pages:
   stage: deploy
   script:
-  - ./build b 
+  - ./build b f
   #- wasm-pack test --headless --chrome
-  - cd www
-  - npm run build
   - mv dist ../public
   artifacts:
     paths:
