@@ -5,7 +5,7 @@ pages:
   script:
   - ./build b f
   #- wasm-pack test --headless --chrome
-  - mv dist ../public
+  - mv frontend/www/dist ../public
   artifacts:
     paths:
     - public
