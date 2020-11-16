@@ -63,6 +63,9 @@ features = [
 	"Request",
 	"RequestInit",
 	"Response",
+	"Node",
+	"NodeList",
+	"DomStringMap",
 	"DedicatedWorkerGlobalScope"
 ]
 

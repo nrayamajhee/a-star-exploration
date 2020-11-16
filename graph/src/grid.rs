@@ -13,6 +13,12 @@ pub enum Cell {
     Visited,
 }
 
+impl Default for Cell {
+    fn default() -> Self {
+        Self::Block
+    }
+}
+
 impl Cell {
     pub fn fill_color(&self) -> &'static str {
         match self {

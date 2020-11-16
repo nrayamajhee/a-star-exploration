@@ -1,17 +1,20 @@
 use crate::{
     dom::{
-        add_event_mut, add_style, body, document, event_as_input, fetch_then, get_el, get_value,
-        insert_html_at, loop_animation_frame, window, FetchMethod, HtmlPosition,
+        add_event, add_event_mut, add_style, body, document, event_as_input, fetch_then, for_each,
+        get_el, get_target_el, get_value, html_el_from, insert_html_at, loop_animation_frame,
+        query_els, window, FetchMethod, HtmlPosition,
     },
     DrawMode, RcCell, Renderer,
 };
 use a_star_graph::{AStarBidirectional, AStarConfig, Cell, Grid, Position, Request, Response};
 use js_sys::Math;
 use maud::html;
+use std::str::FromStr;
+use strum_macros::EnumString;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlCanvasElement, MouseEvent};
+use web_sys::{DomStringMap, HtmlCanvasElement, MouseEvent};
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, EnumString)]
 pub enum AppEvent {
     Mouse(Position, Option<Position>, Cell),
     Trace,
@@ -22,7 +25,8 @@ pub enum AppEvent {
     Multithreaded(bool),
     Bidirectional(bool),
     Step,
-    Clear(bool),
+    Clear,
+    ClearAll,
     Resize,
     ResizeGrid,
     None,
@@ -109,9 +113,9 @@ impl App {
         let top_bar = html! {
             #top.bar {
                 .left {
-                    button#play { "Play" }
-                    button#step { "Step" }
-                    button#solve { "Solve" }
+                    button data-event="Play" { "Play" }
+                    button data-event="Step" { "Step" }
+                    button data-event="Solve" { "Solve" }
                     span#time {}
                 }
                 .center {
@@ -123,12 +127,11 @@ impl App {
                     label for="diag" {"Diagonal"}
                 }
                 .right {
-                    button#clear { "Clear" }
-                    button#clear-w { "Clear All" }
+                    button data-event="Clear" { "Clear" }
+                    button data-event="ClearAll" { "Clear All" }
                 }
             }
-        }
-        .into_string();
+        };
         let bottom_bar = html! {
             #bottom.bar {
                 .left {
@@ -140,15 +143,18 @@ impl App {
                 }
                 .right {
                     label { "Grid Size" }
-                    input#width min="0" value="100" type="number" {}
+                    input data-event="ResizeGrid" min="8" value="100" type="number" {}
                     span {" x "}
-                    input#height min="0" value="50" type="number" {}
+                    input data-event="ResizeGrid" min="8" value="50" type="number" {}
                 }
             }
-        }
-        .into_string();
-        insert_html_at(&body(), top_bar.as_str(), HtmlPosition::Start);
-        insert_html_at(&body(), bottom_bar.as_str(), HtmlPosition::End);
+        };
+        insert_html_at(&body(), top_bar.into_string().as_str(), HtmlPosition::Start);
+        insert_html_at(
+            &body(),
+            bottom_bar.into_string().as_str(),
+            HtmlPosition::End,
+        );
         let event = RcCell::new(AppEvent::Resize);
         let app = Self {
             grid,
@@ -164,20 +170,28 @@ impl App {
         app
     }
     pub fn bind_events(&self) {
-        add_event_mut(&get_el("play"), "click", &self.event, |event, _| {
-            *event = AppEvent::Play;
+        let ev = self.event.clone();
+        for_each(&query_els("input[data-event]"), move |each| {
+            let ev = ev.clone();
+            add_event(&each, "input", move |e| {
+                let event = AppEvent::from_str(&event_as_input(&e).dataset().get("event").unwrap())
+                    .unwrap();
+                *ev.borrow_mut() = event;
+            });
         });
-        add_event_mut(&get_el("step"), "click", &self.event, |event, _| {
-            *event = AppEvent::Step;
-        });
-        add_event_mut(&get_el("clear"), "click", &self.event, |event, _| {
-            *event = AppEvent::Clear(false);
-        });
-        add_event_mut(&get_el("clear-w"), "click", &self.event, |event, _| {
-            *event = AppEvent::Clear(true);
-        });
-        add_event_mut(&get_el("solve"), "click", &self.event, |event, _| {
-            *event = AppEvent::Solve;
+        let ev = self.event.clone();
+        for_each(&query_els("button[data-event]"), move |each| {
+            let ev = ev.clone();
+            add_event(&each, "click", move |e| {
+                let event = AppEvent::from_str(
+                    &html_el_from(get_target_el(&e))
+                        .dataset()
+                        .get("event")
+                        .unwrap(),
+                )
+                .unwrap();
+                *ev.borrow_mut() = event;
+            });
         });
         add_event_mut(&get_el("diag"), "input", &self.event, |event, e| {
             *event = AppEvent::Diagonal(event_as_input(&e).checked());
@@ -221,12 +235,6 @@ impl App {
         });
         add_event_mut(&window, "resize", &self.event, |event, _| {
             *event = AppEvent::Resize;
-        });
-        add_event_mut(&get_el("width"), "input", &self.event, |event, _| {
-            *event = AppEvent::ResizeGrid;
-        });
-        add_event_mut(&get_el("height"), "input", &self.event, |event, _| {
-            *event = AppEvent::ResizeGrid;
         });
     }
     pub fn start(mut self) {
@@ -276,12 +284,14 @@ impl App {
                     AppEvent::ResizeGrid => {
                         if let Ok(width) = get_value("width").parse() {
                             if let Ok(height) = get_value("height").parse() {
-                                self.grid.resize(width, height);
-                                let (start, target) =
-                                    self.grid.set_rand_start_n_end(&|| Math::random());
-                                self.graph.set_start(start);
-                                self.graph.set_target(target);
-                                self.renderer.resize(&self.canvas, &self.grid);
+                                if width >= 8 && height >= 8 {
+                                    self.grid.resize(width, height);
+                                    let (start, target) =
+                                        self.grid.set_rand_start_n_end(&|| Math::random());
+                                    self.graph.set_start(start);
+                                    self.graph.set_target(target);
+                                    self.renderer.resize(&self.canvas, &self.grid);
+                                }
                             }
                         }
                     }
@@ -374,9 +384,13 @@ impl App {
                             },
                         );
                     }
-                    AppEvent::Clear(walls) => {
+                    AppEvent::Clear => {
                         self.graph.clear();
-                        self.grid.clear(*walls);
+                        self.grid.clear(false);
+                    }
+                    AppEvent::ClearAll => {
+                        self.graph.clear();
+                        self.grid.clear(true);
                     }
                     _ => (),
                 }

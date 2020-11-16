@@ -6,8 +6,38 @@ use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 use web_sys::{
     Document, Element, Event, EventTarget, HtmlElement, HtmlHeadElement, HtmlInputElement,
-    HtmlStyleElement, Request, RequestInit, Response, Window,
+    HtmlStyleElement, NodeList, Request, RequestInit, Response, Window,
 };
+
+pub fn query_els(selector: &str) -> NodeList {
+    document()
+        .query_selector_all(selector)
+        .unwrap_or_else(|_| panic!("No element matches selector: {}", selector))
+}
+
+pub fn html_el_from(el: Element) -> HtmlElement {
+    el.dyn_into::<HtmlElement>()
+        .expect("Can't cast the html element as elment")
+}
+
+pub fn for_each<F: 'static + Fn(Element)>(node_list: &NodeList, clo: F) {
+    for i in 0..node_list.length() {
+        clo(node_list.get(i).unwrap().dyn_into::<Element>().unwrap());
+    }
+}
+
+pub fn try_query_el(selector: &str) -> Option<Element> {
+    document().query_selector(selector).unwrap_or_else(|err| {
+        panic!(
+            "There was an error running query selector: {}\n{:?}",
+            selector, err
+        )
+    })
+}
+
+pub fn query_el(selector: &str) -> Element {
+    try_query_el(selector).unwrap_or_else(|| panic!("No element matches selector: {}", selector))
+}
 
 pub fn get_el(id: &str) -> Element {
     document()
@@ -211,6 +241,16 @@ pub fn try_fetch_then<F: 'static + Fn(JsValue)>(url: String, method: FetchMethod
         .catch(&reject);
     resolve.forget();
     reject.forget();
+}
+
+pub fn get_target(e: &Event) -> EventTarget {
+    e.target().expect("No target element for the event!")
+}
+
+pub fn get_target_el(e: &Event) -> Element {
+    get_target(&e)
+        .dyn_into::<Element>()
+        .expect("Can't cast as Element!")
 }
 
 pub fn fetch_then<T: for<'a> Deserialize<'a>, F: 'static + Fn(T)>(

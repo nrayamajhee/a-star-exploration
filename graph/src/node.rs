@@ -13,6 +13,15 @@ pub struct Position {
     pub y: usize,
 }
 
+impl Default for Position {
+    fn default() -> Self {
+        Self {
+            x: 0,
+            y: 0,
+        }
+    }
+}
+
 impl fmt::Display for Position {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "({}, {})", self.x, self.y)
