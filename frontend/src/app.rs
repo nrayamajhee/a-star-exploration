@@ -143,9 +143,9 @@ impl App {
                 }
                 .right {
                     label { "Grid Size" }
-                    input data-event="ResizeGrid" min="8" value="100" type="number" {}
+                    input id="width" data-event="ResizeGrid" min="8" value="100" type="number" {}
                     span {" x "}
-                    input data-event="ResizeGrid" min="8" value="50" type="number" {}
+                    input id="height" data-event="ResizeGrid" min="8" value="50" type="number" {}
                 }
             }
         };
