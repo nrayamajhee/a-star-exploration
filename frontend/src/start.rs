@@ -1,23 +1,24 @@
+use a_star_graph::{AStarBidirectional, AStarConfig, Grid};
+use js_sys::Math;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlCanvasElement;
 
 use crate::{
     app::App,
     dom::{add_style, body, create_el},
-    grid::Grid,
     renderer::Renderer,
-    AStar,
 };
 
 /// The entry point to our app
 pub fn start() {
-    add_style("
+    add_style(
+        "
         body {
             background: #222;
             height: 100vh;
             margin: 0;
             overflow: hidden;
-            font: 16px/1.5 sans-serif;
+            font: 16px/1 sans-serif;
             color: white;
             display: flex;
             flex-direction: column;
@@ -27,13 +28,21 @@ pub fn start() {
         canvas {
             display: block;
         }
-    ");
+    ",
+    );
     let canvas = create_el("canvas");
     body().append_child(&canvas).unwrap();
     let canvas = canvas.dyn_into::<HtmlCanvasElement>().unwrap();
-    let mut grid = Grid::new(50, 25);
-    let renderer = Renderer::new(&canvas, 4., Some(2.));
-    let graph = AStar::new(&mut grid);
+    let renderer = Renderer::new(&canvas, 0., None);
+    let mut grid = Grid::new(100, 50);
+    let (start, target) = grid.set_rand_start_n_end(&|| Math::random());
+    let graph = AStarBidirectional::new(AStarConfig {
+        start,
+        target,
+        diagonal: false,
+        multithreaded: true,
+        bidirectional: false,
+    });
     let app = App::new(canvas, grid, graph, renderer);
     app.start();
 }

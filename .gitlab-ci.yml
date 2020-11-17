@@ -3,12 +3,9 @@ image: nrayamajhee/arch-wasm-pack
 pages:
   stage: deploy
   script:
-  - wasm-pack build 
+  - ./build b f
   #- wasm-pack test --headless --chrome
-  - cd www
-  - npm install
-  - npm run build
-  - mv dist ../public
+  - mv frontend/www/dist public
   artifacts:
     paths:
     - public

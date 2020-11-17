@@ -2,23 +2,88 @@
 
 case $1 in
 	"b" | "build")
-		RUSTFLAGS='-C target-feature=+atomics,+bulk-memory' \
-		  cargo build --target wasm32-unknown-unknown --release -Z build-std=std,panic_abort
-		wasm-bindgen \
-		  --out-dir ./pkg --no-typescript --target no-modules --debug \
-		  $CARGO_TARGET_DIR/wasm32-unknown-unknown/release/a_star.wasm 
+		case $2 in
+			"b" | "backend")
+				cd graph && cargo build
+				cd ../backend && cargo build
+			;;
+			"f" | "frontend")
+				cd graph && cargo build
+				cd ../frontend
+				RUSTFLAGS='-C target-feature=+atomics,+bulk-memory' \
+				cargo build --target wasm32-unknown-unknown --release -Z build-std=std,panic_abort
+				wasm-bindgen \
+				--out-dir ./pkg --no-typescript --target no-modules --debug \
+				$CARGO_TARGET_DIR/wasm32-unknown-unknown/release/a_star_wasm_frontend.wasm 
+			;;
+			*)
+				echo "build build [(f)rontend | (b)ackedn]"
+		esac
 	;;
 	"s" | "serve")
 		python3 server.py
 	;;
-	"r" | "run")
-		$0 build
-		$0 serve
-	;;
 	"w" | "watch")
-		cargo watch -w src -w Cargo.toml -s "$0 run"
+		case $2 in
+			"b" | "backend")
+				cargo watch -w graph -w backend -x "run"
+			;;
+			"f" | "frontend")
+				cargo watch -w graph -w frontend/src -w frontend/Cargo.toml -s "$0 build f && $0 serve"
+			;;
+			*)
+				echo "build watch [(f)rontend | (b)ackedn]"
+		esac
+	;;
+	"d" | "document")
+		D_PRIVATE="--document-private-items"
+		D_OPEN="--open"
+		SECOND="$2"
+		VALID=true
+		while [ "$2" != "" ]; do
+			if [[ ${SECOND:1:1} == "-" ]]; then
+				case $2 in
+				"--public")
+					D_PRIVATE=""
+					;;
+				"--quiet")
+					D_OPEN=""
+					;;
+				*)
+					VALID=false
+					;;
+				esac
+			elif [ ${SECOND:0:1} == "-" ]; then
+				for i in $(seq -s " " 1 ${#SECOND}); do
+					case ${SECOND:i:1} in
+					"p")
+						D_PRIVATE=""
+						;;
+					"q")
+						D_OPEN=""
+						;;
+					"")
+						break
+						;;
+					*)
+						VALID=false
+						;;
+					esac
+				done
+			else
+				VALID=false
+				break
+			fi
+			shift
+		done
+		if [ "$VALID" = true ]; then
+			echo "cargo doc $D_PRIVATE $D_OPEN --workspace"
+			cargo doc $D_PRIVATE $D_OPEN --workspace
+		else
+			echo "build document [-|--] [(p)ublic | (q)uiet]"
+		fi
 	;;
 	*)
-		echo "build [(b)uild | (s)erve | (r)un | (w)atch]"
+		echo "build [(b)uild | (s)erve | (r)un | (w)atch | (d)ocument]"
 esac
 
